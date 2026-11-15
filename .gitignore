@@ -1,0 +1,6 @@
+data/
+*.key
+*.db
+*.log
+__pycache__/
+*.bak*

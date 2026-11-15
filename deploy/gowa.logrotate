@@ -1,0 +1,11 @@
+/opt/gowa/server.log {
+    daily
+    rotate 14
+    maxsize 50M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+    su gowa gowa
+}

@@ -1,0 +1,21 @@
+# GoW Ascension community server behind HTTPS (Caddy gets a Let's Encrypt certificate for @DOMAIN@ by itself;
+# sslip.io names point at the IP written in them). Only the admin page and the game's own requests are passed on.
+@DOMAIN@ {
+	@admin path /admin /admin/*
+	handle @admin {
+		reverse_proxy 127.0.0.1:36101
+	}
+	@game path /nonce /ticket /hello /peer /tss /api/* /leaderboard /leaderboards
+	handle @game {
+		reverse_proxy 127.0.0.1:36101
+	}
+	handle {
+		respond "Not found" 404
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Frame-Options DENY
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+}

@@ -1,0 +1,19 @@
+[Unit]
+Description=GoW Ascension community server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=gowa
+WorkingDirectory=/opt/gowa/server
+ExecStart=/usr/bin/python3 -I /opt/gowa/server/gowa_server.py --host 0.0.0.0 --public --advertise @IP@ --name "@NAME@" --data /opt/gowa/data --log /opt/gowa/server.log
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/gowa
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

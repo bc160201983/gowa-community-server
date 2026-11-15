@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Server Admin</title>
+<style>
+:root {
+  --bg:#110e0c; --bg2:#17130f; --card:#1c1814; --card2:#231e19; --ink:#f3ede4; --mut:#a89d90; --dim:#776c61;
+  --line:#2f2822; --gold:#d6a84a; --gold2:#f0c96b; --red:#c23a2b; --red2:#e0574a; --ok:#5cc18a; --warn:#e6a23c;
+  --chip:#2a231d; --shadow:0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px rgba(0,0,0,.25);
+}
+@media (prefers-color-scheme: light) { :root {
+  --bg:#f5f1ea; --bg2:#ede7dd; --card:#fffdf9; --card2:#f7f2ea; --ink:#1f1a15; --mut:#6d645a; --dim:#968b7f;
+  --line:#e2dacd; --gold:#a8771c; --gold2:#8a5f10; --red:#a72a1e; --red2:#c23a2b; --ok:#2e7d4f; --warn:#a96400;
+  --chip:#efe7db; --shadow:0 1px 2px rgba(60,40,20,.06), 0 6px 18px rgba(60,40,20,.06); } }
+* { box-sizing:border-box } [hidden] { display:none !important }
+html { background:var(--bg) }
+body { margin:0; background:radial-gradient(1200px 500px at 50% -200px, rgba(194,58,43,.16), transparent 70%), var(--bg);
+  color:var(--ink); font:15px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif; min-height:100vh }
+a { color:var(--gold) }
+code { background:var(--chip); padding:1px 6px; border-radius:6px; font-size:13px }
+
+/* top bar */
+.top { position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:14px; padding:12px 24px;
+  background:color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter:blur(8px); border-bottom:1px solid var(--line) }
+.brand { display:flex; align-items:center; gap:10px; min-width:0 }
+.brand svg { flex:none }
+.brand h1 { margin:0; font-size:16px; letter-spacing:.3px; white-space:nowrap }
+.brand .sub { color:var(--mut); font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.tabs { display:flex; gap:4px; margin-left:auto; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:4px }
+.tabs button { border:0; background:none; color:var(--mut); padding:7px 14px; border-radius:9px; cursor:pointer; font:inherit; font-size:14px }
+.tabs button.on { background:var(--card2); color:var(--ink); box-shadow:inset 0 -2px 0 var(--gold) }
+.live { display:flex; align-items:center; gap:7px; color:var(--mut); font-size:12.5px; white-space:nowrap }
+.dot { width:8px; height:8px; border-radius:50%; background:var(--ok); box-shadow:0 0 0 0 rgba(92,193,138,.6); animation:pulse 2s infinite }
+.dot.off { background:var(--red); animation:none }
+@keyframes pulse { 70% { box-shadow:0 0 0 7px rgba(92,193,138,0) } 100% { box-shadow:0 0 0 0 rgba(92,193,138,0) } }
+@media (prefers-reduced-motion: reduce) { .dot { animation:none } }
+
+main { max-width:1180px; margin:0 auto; padding:22px 24px 48px }
+h2 { font-size:13px; text-transform:uppercase; letter-spacing:.9px; color:var(--mut); margin:0 0 10px; font-weight:600 }
+.card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; box-shadow:var(--shadow) }
+.grid2 { display:grid; grid-template-columns:1.6fr 1fr; gap:16px; margin-top:16px }
+@media (max-width: 860px) { .grid2 { grid-template-columns:1fr } .top { flex-wrap:wrap; padding:10px 16px } .tabs { margin-left:0; order:3; width:100% } main { padding:16px } }
+
+/* stat tiles */
+.tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px }
+.tile { position:relative; overflow:hidden; background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px 16px; box-shadow:var(--shadow) }
+.tile::before { content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--accent, var(--line)) }
+.tile .n { font-size:30px; font-weight:650; font-variant-numeric:tabular-nums; line-height:1.15 }
+.tile .l { color:var(--mut); font-size:13px }
+
+/* matches */
+.matches { display:grid; gap:10px }
+.match { border:1px solid var(--line); background:var(--card2); border-radius:12px; padding:12px 14px }
+.match .hd { display:flex; align-items:center; gap:8px; flex-wrap:wrap }
+.match .mode { font-weight:600 }
+.match .ps { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px }
+.empty { color:var(--dim); padding:14px 2px; font-size:14px }
+.kv { display:grid; grid-template-columns:auto 1fr; gap:6px 14px; font-size:14px }
+.kv div:nth-child(odd) { color:var(--mut) }
+
+/* chips and pills */
+.chip { display:inline-flex; align-items:center; gap:5px; padding:2px 9px; border-radius:99px; background:var(--chip); font-size:12.5px; white-space:nowrap }
+.chip.code { font-family:Consolas,"Cascadia Mono",monospace; letter-spacing:.8px; color:var(--gold2); border:1px solid color-mix(in srgb, var(--gold) 40%, transparent); background:transparent }
+.pill { display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:550 }
+.pill::before { content:""; width:7px; height:7px; border-radius:50% ; background:currentColor }
+.s-offline { color:var(--dim) } .s-lobby { color:var(--ink) } .s-searching { color:var(--warn) } .s-match { color:var(--ok) } .s-banned { color:var(--red2) }
+.st-starting { color:var(--warn) } .st-playing { color:var(--ok) }
+
+/* forms and buttons */
+.bar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px }
+input, select { background:var(--bg2); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:8px 11px; font:inherit; font-size:14px }
+input:focus, select:focus { outline:2px solid color-mix(in srgb, var(--gold) 55%, transparent); outline-offset:1px }
+.btn { border:1px solid var(--line); background:var(--chip); color:var(--ink); border-radius:9px; padding:6px 12px; cursor:pointer; font:inherit; font-size:13.5px }
+.btn:hover { border-color:var(--dim) }
+.btn.pri { background:linear-gradient(180deg, var(--red2), var(--red)); border-color:var(--red); color:#fff }
+.btn.gold { background:transparent; border-color:var(--gold); color:var(--gold2) }
+.btn.danger { background:transparent; border-color:color-mix(in srgb, var(--red2) 60%, transparent); color:var(--red2) }
+
+/* tables */
+.wrap { overflow-x:auto }
+table { width:100%; border-collapse:collapse }
+th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); font-size:14px; vertical-align:middle }
+tbody tr:hover { background:color-mix(in srgb, var(--card2) 70%, transparent) }
+th { color:var(--mut); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.6px }
+td.acts { white-space:nowrap; text-align:right }
+.mut { color:var(--mut) } .small { font-size:12px }
+
+/* login */
+.login { max-width:440px; margin:12vh auto 0; text-align:center }
+.login .card { text-align:left; padding:22px }
+.login svg { margin-bottom:10px }
+#msg { min-height:20px; color:var(--red2); margin-top:8px; font-size:14px }
+.toast { position:fixed; right:18px; bottom:18px; background:var(--card2); border:1px solid var(--line); border-left:3px solid var(--gold);
+  padding:10px 14px; border-radius:10px; box-shadow:var(--shadow); font-size:14px; max-width:360px; opacity:0; transform:translateY(8px); transition:.2s }
+.toast.show { opacity:1; transform:none }
+.toast.err { border-left-color:var(--red2) }
+</style></head><body>
+
+<template id="mark"><svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+  <circle cx="32" cy="32" r="29" fill="none" stroke="var(--gold)" stroke-width="3"/>
+  <circle cx="32" cy="32" r="21" fill="var(--red)" opacity=".9"/>
+  <path d="M10 32h6v-6h6v6M42 32h6v6h6v-6" fill="none" stroke="var(--gold)" stroke-width="2.5" stroke-linejoin="round"/>
+  <text x="32" y="38" text-anchor="middle" font-family="Georgia,serif" font-weight="700" font-size="17" fill="var(--gold2)">PC</text>
+</svg></template>
+
+<div class="login" id="login">
+  <div id="loginmark"></div>
+  <h1 style="margin:0 0 4px;font-size:22px">Community Server</h1>
+  <p class="mut" style="margin:0 0 18px">Admin page · this server PC only</p>
+  <div class="card">
+    <label for="key" class="mut small">Admin key</label>
+    <div class="bar" style="margin:6px 0 0"><input id="key" type="password" placeholder="32 characters" style="flex:1" autocomplete="off">
+      <button class="btn pri" id="go">Open</button></div>
+    <p class="mut small" style="margin:10px 0 0">On this PC in <code>server\data\admin.key</code>. Kept only in this browser tab.</p>
+    <div id="msg"></div>
+  </div>
+</div>
+
+<div id="app" hidden>
+<header class="top">
+  <div class="brand"><span id="topmark"></span><div><h1>Community Server</h1><div class="sub" id="ver">—</div></div></div>
+  <nav class="tabs" id="tabs"><button data-t="dash" class="on">Dashboard</button><button data-t="players">Players</button><button data-t="servers">Server list</button></nav>
+  <div class="live"><span class="dot" id="dot"></span><span id="livet">live</span></div>
+</header>
+<main>
+  <section id="t-dash">
+    <div class="tiles" id="tiles"></div>
+    <div class="grid2">
+      <div class="card"><h2>Live matches</h2><div class="matches" id="matches"></div></div>
+      <div style="display:grid;gap:16px;align-content:start">
+        <div class="card"><h2>Searching now</h2><div id="searching"></div></div>
+        <div class="card"><h2>Server</h2><div class="kv" id="server"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="t-players" hidden><div class="card">
+    <div class="bar"><input id="q" placeholder="Search name" style="flex:1;min-width:170px">
+      <select id="f"><option value="">All players</option><option value="online">Online now</option><option value="in match">In a match</option>
+        <option value="searching">Searching</option><option value="banned">Banned</option></select>
+      <button class="btn" id="refresh">Refresh</button></div>
+    <div class="wrap"><table><thead><tr><th>Player</th><th>State</th><th>Mode</th><th>Match code</th><th>Address</th><th>Last seen</th><th>Created</th><th></th></tr></thead>
+      <tbody id="pl"></tbody></table></div>
+    <div class="mut small" id="plinfo" style="margin-top:10px"></div></div>
+  </section>
+
+  <section id="t-servers" hidden>
+    <div class="card"><h2>Add a community server</h2>
+      <div class="bar"><input id="sn" placeholder="Name" style="flex:1;min-width:140px"><input id="sa" placeholder="host or host:port" style="flex:1;min-width:170px">
+        <select id="sr"><option>Europe</option><option>North America</option><option>South America</option><option>Asia</option>
+          <option>Middle East</option><option>Oceania</option><option>Africa</option><option>Other</option></select>
+        <input id="st" placeholder="Note (optional)" style="flex:1;min-width:140px"><button class="btn pri" id="sadd">Add</button></div>
+      <p class="mut small" style="margin:0">Launchers show this list (public <code>/api/servers</code>). Check asks that server for its status.</p></div>
+    <div class="card" style="margin-top:16px"><div class="wrap"><table><thead><tr><th>Name</th><th>Region</th><th>Address</th><th>Status</th><th>Note</th><th></th></tr></thead>
+      <tbody id="sv"></tbody></table></div></div>
+  </section>
+</main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+let KEY = ""; try { KEY = sessionStorage.getItem("adminKey") || ""; } catch (e) {}
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const when = t => t ? new Date(t * 1000).toLocaleString() : "";
+const ago = t => { if (!t) return ""; const s = Math.max(0, Date.now() / 1000 - t); return s < 90 ? "just now" : s < 5400 ? Math.round(s / 60) + " min ago" : s < 129600 ? Math.round(s / 3600) + " h ago" : when(t); };
+for (const id of ["loginmark", "topmark"]) $(id).appendChild($("mark").content.cloneNode(true));
+let toastT; function toast(text, err) { const t = $("toast"); t.textContent = text; t.className = "toast show" + (err ? " err" : ""); clearTimeout(toastT); toastT = setTimeout(() => t.className = "toast", 3200); }
+
+async function api(path, body) {
+  const r = await fetch("/admin/api/" + path, { method: body ? "POST" : "GET",
+    headers: { "X-Admin-Key": KEY, "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || ("HTTP " + r.status));
+  return d;
+}
+async function open_() {
+  try { await api("overview"); } catch (e) { $("msg").textContent = e.message; return; }
+  try { sessionStorage.setItem("adminKey", KEY); } catch (e) {}
+  $("login").hidden = true; $("app").hidden = false; load(); setInterval(load, 5000);
+}
+$("go").onclick = () => { KEY = $("key").value.trim(); open_(); };
+$("key").onkeydown = e => { if (e.key === "Enter") $("go").click(); };
+
+const TAB = () => document.querySelector("#tabs button.on").dataset.t;
+document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#tabs button").forEach(x => x.classList.toggle("on", x === b));
+  for (const t of ["dash", "players", "servers"]) $("t-" + t).hidden = b.dataset.t !== t;
+  load();
+});
+
+let PLAYERS = [];
+async function load() {
+  try {
+    const o = await api("overview");
+    const up = o.uptime_s, h = Math.floor(up / 3600), m = Math.floor(up % 3600 / 60);
+    $("ver").textContent = o.version + " · up " + (h ? h + " h " : "") + m + " min";
+    const tiles = [["Online now", o.online, "var(--ok)"], ["In a match", o.in_match, "var(--gold)"], ["Searching", o.searching, "var(--warn)"],
+                   ["Matches", o.matches, "var(--red2)"], ["Accounts", o.accounts, "var(--line)"], ["Banned", o.banned, "var(--line)"]];
+    $("tiles").innerHTML = tiles.map(([l, n, c]) => `<div class="tile" style="--accent:${c}"><div class="n">${esc(n)}</div><div class="l">${l}</div></div>`).join("");
+    $("server").innerHTML = [["Version", o.version], ["Up", (h ? h + " h " : "") + m + " min"], ["Sign-ins", o.sign_ins],
+      ["In the lobby", o.lobby], ["Accounts", o.accounts], ["Relayed packets", (o.relayed || 0).toLocaleString()]].map(([k, v]) => `<div>${k}</div><div>${esc(v)}</div>`).join("");
+    const t = TAB();
+    if (t === "dash") drawLive(await api("live"));
+    if (t === "players") { PLAYERS = (await api("players")).players; drawPlayers(); }
+    if (t === "servers") drawServers((await api("servers")).servers);
+    $("dot").className = "dot"; $("livet").textContent = "live";
+  } catch (e) { $("dot").className = "dot off"; $("livet").textContent = "no answer"; }
+}
+
+function drawLive(d) {
+  $("matches").innerHTML = d.matches.map(m => `<div class="match"><div class="hd">
+      <span class="mode">${esc(m.mode || "Match")}</span><span class="pill st-${esc(m.state)}">${m.state === "playing" ? "playing" : "starting"}</span>
+      ${m.party ? `<span class="chip code" title="Private match code">${esc(m.party)}</span>` : `<span class="chip">public</span>`}
+      <span class="mut small" style="margin-left:auto">#${esc(m.id)}</span></div>
+      <div class="ps">${m.players.map((n, i) => `<span class="chip">${i === 0 ? "★ " : ""}${esc(n)}</span>`).join("")}</div></div>`).join("")
+    || '<div class="empty">No match right now.</div>';
+  $("searching").innerHTML = d.searching.length ? '<div class="matches">' + d.searching.map(s => `<div class="match" style="padding:9px 12px"><div class="hd">
+      <b>${esc(s.name)}</b><span class="mut small">${s.mode === "any" ? "Quick Match" : esc(s.mode)}</span><span class="mut small">· ${esc(s.waiting_s)} s</span>
+      ${s.party ? `<span class="chip code" style="margin-left:auto">${esc(s.party)}</span>` : ""}</div></div>`).join("") + "</div>"
+    : '<div class="empty">Nobody is searching.</div>';
+}
+
+function drawPlayers() {
+  const q = $("q").value.trim().toLowerCase(), f = $("f").value;
+  const rows = PLAYERS.filter(p => (!q || (p.name || "").toLowerCase().includes(q)) &&
+    (!f || (f === "online" ? p.state !== "offline" : f === "banned" ? p.banned : p.state === f)));
+  $("pl").innerHTML = rows.map(p => {
+    const cls = p.banned ? "s-banned" : p.state === "in match" ? "s-match" : "s-" + p.state;
+    const st = `<span class="pill ${cls}">${p.banned ? "banned" : esc(p.state)}</span>`;
+    const acts = (p.state !== "offline" ? `<button class="btn" data-a="kick" data-n="${esc(p.name)}">Kick</button> ` : "") +
+      (p.banned ? `<button class="btn gold" data-a="unban" data-n="${esc(p.name)}">Unban</button>`
+                : `<button class="btn danger" data-a="ban" data-n="${esc(p.name)}">Ban</button>`) +
+      (p.lb === "listed" ? ` <button class="btn" data-a="lb/hide" data-n="${esc(p.name)}" title="Leave off the public leaderboards">Hide stats</button>`
+       : p.lb === "hidden" ? ` <button class="btn gold" data-a="lb/show" data-n="${esc(p.name)}">Show stats</button>` : "") +
+      (p.lb ? ` <button class="btn danger" data-a="lb/reset" data-n="${esc(p.name)}" title="Delete reported stats">Reset stats</button>` : "");
+    return `<tr><td><b>${esc(p.name)}</b><div class="mut small">#${esc(p.acct)}</div></td><td>${st}</td>
+      <td class="mut">${esc(p.mode || "")}</td><td>${p.party ? `<span class="chip code">${esc(p.party)}</span>` : ""}</td>
+      <td class="mut">${esc(p.address)}</td><td class="mut">${p.state !== "offline" ? "now" : ago(p.last_seen)}</td>
+      <td class="mut">${when(p.created)}</td><td class="acts">${acts}</td></tr>`;
+  }).join("") || '<tr><td colspan="8" class="empty">No players.</td></tr>';
+  $("plinfo").textContent = rows.length + " shown · " + PLAYERS.filter(p => p.state !== "offline").length + " online";
+}
+$("pl").onclick = async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const a = b.dataset.a, n = b.dataset.n;
+  if (a === "ban" && !confirm("Ban " + n + "? They are kicked and cannot sign in until unbanned.")) return;
+  if (a === "lb/reset" && !confirm("Delete " + n + "'s reported leaderboard stats? Their next saved match starts a new entry.")) return;
+  const done = { kick: " kicked", ban: " banned", unban: " unbanned", "lb/hide": " hidden from the leaderboards",
+                 "lb/show": " shown on the leaderboards", "lb/reset": " stats reset" };
+  try { await api(a, { name: n }); toast(n + done[a]); load(); }
+  catch (err) { toast(err.message, true); }
+};
+$("q").oninput = drawPlayers; $("f").onchange = drawPlayers; $("refresh").onclick = load;
+
+const STATUS = {};
+function drawServers(list) {
+  $("sv").innerHTML = list.map(s => {
+    const st = STATUS[s.id];
+    const txt = !st ? '<span class="mut">not checked</span>' : st.ok
+      ? `<span class="pill s-match">online</span> <span class="mut small">${esc(st.status.players_online)} players · ${esc(st.status.version)}</span>`
+      : `<span class="pill s-banned">unreachable</span>`;
+    return `<tr><td><b>${esc(s.name)}</b></td><td><span class="chip">${esc(s.region)}</span></td><td class="mut">${esc(s.address)}</td>
+      <td>${txt}</td><td class="mut">${esc(s.note)}</td><td class="acts"><button class="btn" data-a="check" data-i="${s.id}">Check</button>
+      <button class="btn danger" data-a="remove" data-i="${s.id}">Remove</button></td></tr>`;
+  }).join("") || '<tr><td colspan="6" class="empty">No servers in the list yet.</td></tr>';
+}
+$("sv").onclick = async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  const id = Number(b.dataset.i);
+  try {
+    if (b.dataset.a === "check") { b.textContent = "…"; STATUS[id] = await api("servers/check", { id }); drawServers((await api("servers")).servers); }
+    else if (confirm("Remove this server from the list?")) { drawServers((await api("servers/remove", { id })).servers); toast("Server removed"); }
+  } catch (err) { toast(err.message, true); }
+};
+$("sadd").onclick = async () => {
+  try { drawServers((await api("servers/add", { name: $("sn").value, address: $("sa").value, region: $("sr").value,
+          note: $("st").value })).servers); $("sn").value = $("sa").value = $("st").value = ""; toast("Server added"); }
+  catch (err) { toast(err.message, true); }
+};
+if (KEY) open_();
+</script></body></html>
