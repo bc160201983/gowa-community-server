@@ -133,9 +133,21 @@ class Matchmaker:
         # Private matches (2026-11-13): a player with a party code (runtime PS3_MPNET_PARTY -> /hello?party=, later a
         # Discord invite) searches only among players with the same code; everyone else uses the public queue.
         party = self.party_of(pl.online_id) if (self.party_of and pl.online_id) else None
+        # Same game data only (2026-11-15, MEASURED on the Europe server): the shard key carries the game's data hash
+        # (mods change it). Two players with different data were matched, and the second one's game left the match
+        # within a second, every time. So the shard is part of the pool, and a party mate on other data is logged.
+        shard = req.get("shard", 0)
         if party:
-            req = dict(req, pool=("party", party, req["pool"]))
+            others = [q for k, ps in self.pools.items() if isinstance(k, tuple) and k[:2] == ("party", party)
+                      for q in ps if q.request.get("shard", 0) != shard]
+            for q in others:
+                self.log("%s and %s share party %s but have different game data (%08X vs %08X): mods on online or "
+                         "another game version; they cannot play together" % (pl.online_id, q.online_id, party,
+                         shard >> 32, q.request.get("shard", 0) >> 32))
+            req = dict(req, pool=("party", party, shard, req["pool"]))
             self.log("%s searches in private party %s" % (pl.online_id, party))
+        else:
+            req = dict(req, pool=(shard, req["pool"]))
         pl.request = req
         pl.search_t = self.clock()
         self.stats["searches"] += 1

@@ -130,8 +130,9 @@ class MatchTests(unittest.TestCase):
         self.assertEqual((r["acct"], r["service"], r["session_id"], r["response"]), (acct, 0, 0, 0))
         return pl, sink
 
-    def search(self, mm, pl, name, key=9, slot=-1, any_mode=0):
-        (s, m, p), = C.split_frames(C.match_request(key, slot, [player_record(pl.acct, name)], flag6=any_mode))[0]
+    def search(self, mm, pl, name, key=9, slot=-1, any_mode=0, shard=0):
+        (s, m, p), = C.split_frames(C.match_request(key, slot, [player_record(pl.acct, name)], flag6=any_mode,
+                                                     shard=shard))[0]
         return mm.on_match_request(pl, C.parse_match_request(p))
 
     def test_session_begin_and_end(self):
@@ -322,6 +323,26 @@ class MatchTests(unittest.TestCase):
         self.assertEqual(len(C.parse_game_world_update(sa.take()[0][2])["roster"]), 1)
         self.assertIsNone(b.world)
 
+    def test_different_game_data_never_matched(self):
+        # 2026-11-15 (Europe server): a player with mods on (data hash B92E156B) was matched with one on the disc's
+        # data (F8C0B979) through a shared party code; the second game left at once. Different shards never match.
+        logs = []
+        mm = sam_match.Matchmaker(min_players=2, party_of=lambda oid: "FRNG4P", log=logs.append)
+        a, sa = self.mk(mm, 1, "A")
+        b, sb = self.mk(mm, 2, "B")
+        c, sc = self.mk(mm, 3, "C")
+        for pl in (a, b, c):
+            mm.on_session_begin(pl, C.SVC_MATCH)
+        self.search(mm, a, "A", shard=0xF8C0B979800038D0)
+        self.search(mm, b, "B", shard=0xB92E156B800038D0)
+        self.assertIsNone(a.world)
+        self.assertIsNone(b.world)
+        self.assertTrue(any("different game data" in l and "B92E156B" in l for l in logs))
+        self.search(mm, c, "C", shard=0xF8C0B979800038D0)
+        self.assertIsNotNone(a.world)
+        self.assertIs(a.world, c.world)
+        self.assertIsNone(b.world)
+
     def test_modes_do_not_mix_and_real_request_decodes(self):
         mm = sam_match.Matchmaker(min_players=2)
         a, sa = self.mk(mm, 1, "A")
@@ -330,7 +351,7 @@ class MatchTests(unittest.TestCase):
             mm.on_session_begin(pl, C.SVC_MATCH)
         self.search(mm, a, "A", slot=8)
         self.search(mm, b, "B", slot=9)
-        self.assertEqual(len(mm.pools[9]), 2)                           # two players who PICKED different modes wait
+        self.assertEqual(len(mm.pools[(0, 9)]), 2)                           # two players who PICKED different modes wait
         mm.leave(a), mm.leave(b), sa.take(), sb.take()
         self.search(mm, a, "A", slot=8, any_mode=1)
         self.search(mm, b, "B", slot=9, any_mode=1)
