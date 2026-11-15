@@ -1,5 +1,10 @@
 # GoW Ascension community server
 
+<p align="left">
+  <a href="https://www.youtube.com/@BilalReloaded"><img alt="YouTube: BilalReloaded" src="https://img.shields.io/badge/YouTube-BilalReloaded-FF0000?style=for-the-badge&logo=youtube&logoColor=white"></a>
+  <a href="https://www.patreon.com/cw/bilalreloaded"><img alt="Support on Patreon" src="https://img.shields.io/badge/Patreon-Support-F96854?style=for-the-badge&logo=patreon&logoColor=white"></a>
+</p>
+
 A small, self-hosted matchmaking server for the **God of War: Ascension PC port** (PS3 recompilation), so the
 game's multiplayer works again after the official servers closed.
 Python 3 standard library only, no database server, no Sony keys. Unofficial fan project, not affiliated with Sony.
