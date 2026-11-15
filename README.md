@@ -26,6 +26,9 @@ never touches that check.
 
 ## Host one
 
+**Step-by-step guide (LAN, VPS, Windows PC, connecting to the launcher, admin, Discord, troubleshooting):
+[docs/HOSTING-GUIDE.md](docs/HOSTING-GUIDE.md)**
+
 ### 1. On a VPS (players anywhere, about 5 minutes)
 
 Any Ubuntu 22.04 / 24.04 server with a public IPv4 (a $4-6/month VPS is plenty). As root:
