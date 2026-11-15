@@ -64,6 +64,40 @@ Allow Python in the Windows Firewall when it asks.
 
 ## Players
 
+### What every player needs
+
+1. **Your own copy of the game**, set up in the launcher as usual (the launcher shows *America disc* or *Europe disc*).
+   Players in one match need the **same region**: USA (BCUS98232) with USA, Europe (BCES01741) with Europe, as on
+   the PS3.
+2. **Your own Online Pass** (the game calls it a *Network Pass*). It is the licence file **`INDEX.EDAT`** that your
+   PS3 saved when you redeemed the Online Pass code from your game box (or bought it on the PlayStation Store).
+   The game checks it itself, exactly like on the console: no pass, no online play. Nothing here skips that check,
+   and nobody can give you theirs: use only your own.
+   - **Where it is on your PS3:** `/dev_hdd0/game/BCUS98232/USRDIR/DLC/DLC0/INDEX.EDAT` (USA) or
+     `/dev_hdd0/game/BCES01741/USRDIR/DLC/DLC0/INDEX.EDAT` (Europe). Copy it to your PC with a tool you already use
+     for your console (for example an FTP server on your own PS3, or a backup of its hard drive).
+   - **Where it goes on your PC** (inside the port folder; make the folders if they are missing):
+
+     | Your game | Put `INDEX.EDAT` here |
+     |---|---|
+     | USA (BCUS98232) | `ascension-recomp\ascension\gamedata\dev_hdd0\game\BCUS98232\USRDIR\DLC\DLC0\INDEX.EDAT` |
+     | Europe (BCES01741) | `ascension-recomp\ascension\gamedata\dev_hdd0\game\BCES01741\USRDIR\DLC\DLC0\INDEX.EDAT` |
+
+   - The name must be exactly `INDEX.EDAT`. In File Explorer turn on *View > Show > File name extensions* so it is
+     not secretly `INDEX.EDAT.txt`. The file is small (a few hundred bytes).
+   - With *Play online* on, the launcher's **Play** tells you when the pass is not where the game reads it, with the
+     exact path. If the game itself says **"A Network Pass is required"**, the pass is missing, in the wrong folder,
+     or from the other region.
+3. **A server**: type its address on the launcher's **Online** page (*Server*), paste a friend's invite code
+   (`CODE@server`) into *Match code*, or pick a LAN server under *Pick a server*.
+4. **A player name** (up to 16 letters or digits). The first sign-in keeps it for your PC: the key file
+   `ascension-recomp\ascension\gamedata\mpnet-token.txt` proves it is you. Keep that file (copy it with your saves
+   when you move to a new folder) and never share it.
+5. **Windows Firewall:** when it asks about `AscensionRecomp.online.exe`, allow it (at least *Private networks*).
+   The game talks to other players on **UDP 3658**.
+
+### In the launcher
+
 Launcher, **Online** page: turn on *Play online*, pick a server in *Pick a server* (or type its address in
 *Server*), choose a player name, press Play. Everyone in one match must use the same server.
 
