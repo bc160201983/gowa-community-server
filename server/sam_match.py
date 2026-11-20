@@ -27,6 +27,11 @@ class Player:
         self.world = None
         self.playing = None       # world id of the round being played after the game started (admin page only)
         self.playing_mode, self.playing_count = None, 0   # that round's mode and player count (presence)
+        # 2026-11-17: this search began as Quick Match (flag6). The game then repeats a FIXED mode with flags 0 and
+        # accepts another mode (MEASURED 2026-11-13); a player who PICKED a mode leaves a match in another mode
+        # (MEASURED 2026-11-17, USA world 8215: SaitoRaijin, mode 4/4, put into a 2-player world by the fallback,
+        # closed its connection 80 ms after GameWorldReserved). Only Quick Match players may be moved by the fallback.
+        self.quick = False
 
 
 class World:
@@ -37,7 +42,21 @@ class World:
 
     def roster(self):
         # the first player of the world is its host (+0x61 = 01 00 00 00; MEASURED need, run 121141)
-        return [C.roster_record(p.request["players"][0]["raw"], i, host=(i == 0)) for i, p in enumerate(self.players)]
+        out = [C.roster_record(p.request["players"][0]["raw"], i, host=(i == 0)) for i, p in enumerate(self.players)]
+        # test only (--test-fake-players N, loopback servers): N made-up players after the real ones, copies of the
+        # host's record with their own account id (+0..+8) and name (+8..+0x18), to reproduce 6/8-player matches
+        # with one game window (2026-11-18: every 6-player world on the live servers failed).
+        if TEST_FAKE_PLAYERS and self.players:
+            raw = bytearray(self.players[0].request["players"][0]["raw"])
+            for k in range(TEST_FAKE_PLAYERS):
+                r = bytearray(raw)
+                r[0:8] = (0x7E57000000000001 + k).to_bytes(8, "big")
+                r[8:0x18] = (b"FakeP%d" % (k + 1)).ljust(16, b"\0")
+                out.append(C.roster_record(bytes(r), len(out)))
+        return out[:C.MAX_PLAYERS]
+
+
+TEST_FAKE_PLAYERS = 0   # --test-fake-players N (gowa_server.py, loopback only)
 
 
 # Quick Play modes, biggest first: (mode slot, min players to start, max) - host\mp\NOTES.md mode table (STATIC)
@@ -100,6 +119,7 @@ class Matchmaker:
                         except Exception as e:
                             self.log("on_round_start failed: %s" % e)
                     w.closed = True
+                    pl.quick = False    # the next search starts again from the player's own choice
                     pl.playing = w.id   # still playing that round in its own mesh (admin page: "in match")
                     pl.playing_mode, pl.playing_count = w.mode, getattr(w, "size", len(w.players))
                     w.players = [q for q in w.players if q is not pl]
@@ -129,6 +149,8 @@ class Matchmaker:
                      % (rec["name"], rec["acct"], pl.acct, pl.online_id))
             pl.send(C.game_world_reserved(0, 10), "GameWorldReserved result 10 (InvalidRequest: not your record)")
             return False
+        if req.get("flag6"):
+            pl.quick = True
         self.leave(pl)
         # Private matches (2026-11-13): a player with a party code (runtime PS3_MPNET_PARTY -> /hello?party=, later a
         # Discord invite) searches only among players with the same code; everyone else uses the public queue.
@@ -188,12 +210,14 @@ class Matchmaker:
                     return mode, anym[:min(hi, self.max_players)]
         # Nobody can be matched as asked, and someone has waited fallback_s: after its first search the game repeats a
         # FIXED mode (MEASURED 2026-11-13: the laptop asked for mode 4/3 again and again and accepted mode 8 when matched),
-        # so two players can wait forever for 4- and 8-player modes. Everyone waiting gets the biggest mode they fill.
-        if self.fallback_s and len(pool) >= self.min_players and \
-                any(self.clock() - getattr(q, "search_t", 0) >= self.fallback_s for q in pool):
+        # so two players can wait forever for 4- and 8-player modes. Everyone waiting who started as Quick Match gets
+        # the biggest mode they fill; a player who picked a mode is never moved (2026-11-17, see Player.quick).
+        flex = [q for q in pool if q.request["flag6"] or getattr(q, "quick", False)]
+        if self.fallback_s and len(flex) >= self.min_players and \
+                any(self.clock() - getattr(q, "search_t", 0) >= self.fallback_s for q in flex):
             for mode, lo, hi in QUICK_MODES:
-                if len(pool) >= lo:
-                    return mode, pool[:min(hi, self.max_players)]
+                if len(flex) >= lo:
+                    return mode, flex[:min(hi, self.max_players)]
         return None
 
     def _try_reserve(self, key):

@@ -61,8 +61,30 @@ def peer_address(pid, asker_ip):
     if seen:
         if lan and seen[0] == asker_ip:
             return lan
+        if _shares_outside_ip(pid, seen[0]):
+            return (stand_in_ip(pid), seen[1])
         return seen
     return PEERS[pid]
+
+
+def _shares_outside_ip(pid, ip):
+    """Another signed-in player's game socket was seen at the same outside address (two PCs behind one home router).
+    2026-11-20 (EU worlds 8200/8201/8202: every world with both housemates failed, one of the two dropping ~4 s after
+    GameWorldReserved; every world with only one of them played): the other players' games seem to tell peers apart
+    by IP address only, so two players at one address look like one."""
+    me = (pid or "").lower()
+    online = {(c.online_id or "").lower() for c in list(ONLINE.values()) if c.online_id}
+    return any(k.lower() != me and k.lower() in online and v[0] == ip for k, v in list(PEER_SEEN.items()))
+
+
+def stand_in_ip(pid):
+    """A per-player address in 100.64.0.0/10 (shared address space: never a real host on the internet) for a player
+    who shares an outside address with another one. The game sends to it; the runtime only knows it as that player
+    (mpnet rpeer by address) and, with no direct answer, carries the packets through this server's relay by name
+    within 3 s (mpnet_p2p_wrap), where the relay delivers them to the real outside address. Same name -> same address."""
+    import hashlib as _hl
+    h = int.from_bytes(_hl.sha256((pid or "").lower().encode()).digest()[:4], "big") % (64 * 65536 - 2) + 1
+    return "100.%d.%d.%d" % (64 + (h >> 16), (h >> 8) & 255, h & 255)
 
 
 def _match_of(online_id):
@@ -911,6 +933,7 @@ def main():
     ap.add_argument("--discord-webhook-file", default="", help="file with a Discord webhook URL: post match starts "
                     "and the week's leaders there (optional)")
     ap.add_argument("--discord-daily-hour", type=int, default=18, help="UTC hour of the daily leaders post (default 18)")
+    ap.add_argument("--test-fake-players", type=int, default=0, help="test only (loopback): add N made-up players to every match roster")
     ap.add_argument("--selftest", action="store_true")
     args = ap.parse_args()
     if args.test_relay_gap:
@@ -919,6 +942,10 @@ def main():
             sys.exit("--test-relay-gap is for loopback test servers only")
         n, a, s = args.test_relay_gap.split(",")
         TEST_RELAY_GAP = (n, float(a), float(s))
+    if args.test_fake_players:
+        if args.host != "127.0.0.1":
+            sys.exit("--test-fake-players is for loopback test servers only")
+        sam_match.TEST_FAKE_PLAYERS = max(0, min(7, args.test_fake_players))
     if args.selftest:
         sys.exit(0 if asyncio.run(selftest()) else 1)
     if args.admin_cmd:

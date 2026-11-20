@@ -274,7 +274,15 @@ class MatchTests(unittest.TestCase):
         now = [100.0]
         mm = sam_match.Matchmaker(min_players=2, fallback_s=20, clock=lambda: now[0])
         (a, sa), (b, sb) = self.started(mm, "A", "B")
-        # both repeat a FIXED 4-player mode (flag6 = 0), as the game does after its first search
+        # Quick Match first (flag6 = 1; A alone, so no match), then both repeat a FIXED 4-player mode (flag6 = 0),
+        # as the game does after its first search
+        (s, m, p), = C.split_frames(C.match_request(9, 5, [player_record(a.acct, "A")], a=6, b=8, flag6=1))[0]
+        mm.on_match_request(a, C.parse_match_request(p))
+        mm.on_session_end(a, a.sessions[C.SVC_MATCH], C.SVC_MATCH); mm.on_session_begin(a, C.SVC_MATCH)
+        (s, m, p), = C.split_frames(C.match_request(9, 5, [player_record(b.acct, "B")], a=6, b=8, flag6=1))[0]
+        mm.on_match_request(b, C.parse_match_request(p))
+        mm.on_session_end(b, b.sessions[C.SVC_MATCH], C.SVC_MATCH); mm.on_session_begin(b, C.SVC_MATCH)
+        sa.take(); sb.take()
         for pl, n in ((a, "A"), (b, "B")):
             (s, m, p), = C.split_frames(C.match_request(9, 6, [player_record(pl.acct, n)], a=4, b=4))[0]
             mm.on_match_request(pl, C.parse_match_request(p))
@@ -283,6 +291,34 @@ class MatchTests(unittest.TestCase):
         mm._try_reserve(a.request["pool"])                                            # the timer
         g = [C.parse_game_world_reserved(p) for _, m, p in sb.take() if m == 0x15]
         self.assertEqual((len(g), g[0]["slot"], g[0]["count"]), (1, 8, 2))
+
+    def test_fallback_never_moves_a_player_who_picked_a_mode(self):
+        # MEASURED 2026-11-17 (USA world 8215): a player who picked 4-player versus was put into a 2-player world by
+        # the fallback and its game left at once. Picked modes (flag6 = 0 from the start) are never moved.
+        now = [100.0]
+        mm = sam_match.Matchmaker(min_players=2, fallback_s=20, clock=lambda: now[0])
+        (a, sa), (b, sb) = self.started(mm, "A", "B")
+        for pl, n, sl, lo, hi in ((a, "A", 5, 6, 8), (b, "B", 4, 4, 4)):
+            (s, m, p), = C.split_frames(C.match_request(9, sl, [player_record(pl.acct, n)], a=lo, b=hi))[0]
+            mm.on_match_request(pl, C.parse_match_request(p))
+        now[0] += 60
+        mm._try_reserve(a.request["pool"])
+        self.assertFalse(any(m == 0x15 for _, m, _p in sa.take() + sb.take()))      # both keep waiting for their mode
+        self.assertFalse(a.quick or b.quick)
+
+    def test_fallback_moves_only_the_quick_match_players(self):
+        now = [100.0]
+        mm = sam_match.Matchmaker(min_players=2, fallback_s=20, clock=lambda: now[0])
+        (a, sa), (b, sb), (c, sc) = self.started(mm, "A", "B", "C")
+        for pl, n, sl, lo, hi, f6 in ((a, "A", 5, 6, 8, 0), (b, "B", 4, 4, 4, 1), (c, "C", 5, 6, 8, 1)):
+            (s, m, p), = C.split_frames(C.match_request(9, sl, [player_record(pl.acct, n)], a=lo, b=hi, flag6=f6))[0]
+            mm.on_match_request(pl, C.parse_match_request(p))
+        sa.take()
+        now[0] += 21
+        mm._try_reserve(a.request["pool"])
+        self.assertFalse(any(m == 0x15 for _, m, _p in sa.take()))                   # A picked mode 5: not moved
+        g = [C.parse_game_world_reserved(p) for _, m, p in sb.take() if m == 0x15]
+        self.assertEqual((len(g), g[0]["slot"], g[0]["count"]), (1, 8, 2))          # B + C get the 2-player mode
 
     def test_cancelled_search_leaves_no_ghost(self):
         mm = sam_match.Matchmaker(min_players=2)
@@ -634,6 +670,27 @@ class InternetTests(unittest.TestCase):
         G.PEER_SEEN["A"] = ("203.0.113.5", 51234)          # the router's outside port for A's game socket
         self.assertEqual(G.peer_address("A", "198.51.100.9"), ("203.0.113.5", 51234))  # another home: outside address
         self.assertEqual(G.peer_address("A", "203.0.113.5"), ("192.168.1.20", 3658))   # same router: home address
+
+    def test_two_players_behind_one_router_get_stand_in_addresses(self):
+        # 2026-11-20 (EU worlds 8200-8202): two housemates at one outside address broke every world they were both in
+        G = self.G
+        on = lambda n: type("C", (), {"online_id": n})()
+        G.ONLINE.clear()
+        G.ONLINE.update({1: on("HouseA"), 2: on("HouseB"), 3: on("Other")})
+        G.PEER_LAN.update({"HouseA": ("192.168.0.2", 3658), "HouseB": ("192.168.0.6", 3658)})
+        G.PEER_SEEN.update({"HouseA": ("203.0.113.77", 51093), "HouseB": ("203.0.113.77", 51108),
+                            "Other": ("198.51.100.40", 3658)})
+        a, b = G.peer_address("HouseA", "198.51.100.40"), G.peer_address("HouseB", "198.51.100.40")
+        self.assertEqual((a[1], b[1]), (51093, 51108))
+        self.assertTrue(a[0].startswith("100.") and b[0].startswith("100.") and a[0] != b[0])
+        oct2 = int(a[0].split(".")[1])
+        self.assertTrue(64 <= oct2 <= 127)
+        self.assertEqual(G.peer_address("HouseA", "198.51.100.40"), a)                       # stable
+        self.assertEqual(G.peer_address("HouseA", "203.0.113.77"), ("192.168.0.2", 3658))  # housemate: home address
+        self.assertEqual(G.peer_address("Other", "203.0.113.77"), ("198.51.100.40", 3658))  # others unchanged
+        del G.ONLINE[2]                                                                       # one of them left
+        self.assertEqual(G.peer_address("HouseA", "198.51.100.40"), ("203.0.113.77", 51093))
+        G.ONLINE.clear()
 
     def test_udp_probe_records_only_known_tokens(self):
         G = self.G
