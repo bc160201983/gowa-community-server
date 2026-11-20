@@ -692,6 +692,19 @@ class InternetTests(unittest.TestCase):
         self.assertEqual(G.peer_address("HouseA", "198.51.100.40"), ("203.0.113.77", 51093))
         G.ONLINE.clear()
 
+    def test_sam_keepalive_is_set(self):
+        # 2026-11-20: SAM connections go silent for a whole round; keepalive keeps home routers from dropping them
+        import socket
+        a = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.G.sam_keepalive(a)
+            self.assertEqual(a.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE) != 0, True)
+            if hasattr(socket, "TCP_KEEPIDLE"):
+                self.assertEqual(a.getsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE), self.G.SAM_KEEPALIVE[0])
+        finally:
+            a.close()
+        self.G.sam_keepalive(None)   # no socket (a transport without one): nothing happens
+
     def test_udp_probe_records_only_known_tokens(self):
         G = self.G
         G.UDP_TOKENS["ab" * 16] = "A"

@@ -67,6 +67,33 @@ def peer_address(pid, asker_ip):
     return PEERS[pid]
 
 
+SAM_KEEPALIVE = (45, 15, 6)   # seconds idle before the first probe, seconds between probes, probes before giving up
+
+
+def sam_keepalive(sock):
+    """TCP keepalive on a SAM connection (2026-11-20). During a round the game sends nothing on it (rounds of 8+ min);
+    MEASURED EU world 8208 (4 players, 497 s round): the host's and one guest's connections still carried the round's
+    end (service 4 SessionEnd), the other two never did (one game reconnected, one went silent and stayed "in match"),
+    and every 2-player world ends the same way ~9 s after the round: home routers forget a TCP connection that was
+    silent for a few minutes. The probes (empty segments the other PC's TCP answers by itself, unseen by the game)
+    keep the routers' entries alive, and a PC that is gone is noticed after ~2.5 min instead of never."""
+    if sock is None:
+        return
+    import socket as _s
+    try:
+        sock.setsockopt(_s.SOL_SOCKET, _s.SO_KEEPALIVE, 1)
+        idle, intvl, cnt = SAM_KEEPALIVE
+        if hasattr(_s, "TCP_KEEPIDLE"):                       # Linux (the servers), Windows 10 1709+ with Python 3.7+
+            sock.setsockopt(_s.IPPROTO_TCP, _s.TCP_KEEPIDLE, idle)
+            sock.setsockopt(_s.IPPROTO_TCP, _s.TCP_KEEPINTVL, intvl)
+            if hasattr(_s, "TCP_KEEPCNT"):
+                sock.setsockopt(_s.IPPROTO_TCP, _s.TCP_KEEPCNT, cnt)
+        elif hasattr(sock, "ioctl") and hasattr(_s, "SIO_KEEPALIVE_VALS"):
+            sock.ioctl(_s.SIO_KEEPALIVE_VALS, (1, idle * 1000, intvl * 1000))
+    except OSError as e:
+        log("[sam] keepalive not set: %s" % e)
+
+
 def _shares_outside_ip(pid, ip):
     """Another signed-in player's game socket was seen at the same outside address (two PCs behind one home router).
     2026-11-20 (EU worlds 8200/8201/8202: every world with both housemates failed, one of the two dropping ~4 s after
@@ -809,6 +836,7 @@ async def serve(args, ready=None):
             return
         sam_count[0] += 1
         STATS["sam_online"] = sam_count[0]
+        sam_keepalive(w.get_extra_info("socket"))
         try:
             await SamConn(r, w, args).run()
         finally:
